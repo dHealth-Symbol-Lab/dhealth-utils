@@ -4,7 +4,10 @@ const axios = require('axios');
 
 export class NetworkUtil {
   public static async getNodeFromNetwork(networkType: NetworkType) {
-    const available_nodes = NetworkConfig.networks[networkType].nodes;
+    const available_nodes =
+      this.isSecureConnection() ?
+        NetworkConfig.networks[networkType].httpsNodes :
+        NetworkConfig.networks[networkType].nodes;
     for (const node of available_nodes) {
       const nodeIsUp = await this.nodeIsUp(node.url);
       if (nodeIsUp) {
@@ -48,5 +51,9 @@ export class NetworkUtil {
 	 */
   public static getNetworkTimestampFromRaw(networkType: NetworkType, timestamp: number) {
     return Math.round(timestamp / 1000) + NetworkConfig.networks[networkType].networkConfigurationDefaults.epochAdjustment;
+  }
+
+  public static isSecureConnection() {
+    return typeof process !== 'object' && typeof window !== "undefined" && window.location.protocol === 'https:';
   }
 }

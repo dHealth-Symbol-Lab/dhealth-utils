@@ -45,6 +45,7 @@ export interface NetworkConfigurationDefaults {
 export interface NetworkConfig {
     faucetUrl: string;
     nodes: NodeConfig[];
+    httpsNodes: NodeConfig[];
     defaultNetworkType: number;
     explorerUrl: string;
     networkConfigurationDefaults: NetworkConfigurationDefaults;
@@ -76,9 +77,13 @@ export const defaultTestnetNetworkConfig: NetworkConfig = {
         generationHash: 'F1DE7701FF17DA20904565FA9753690A9990D3B00730A241FFFB7F60C2B5D638',
     },
     nodes: [
+        { friendlyName: 'dual-01-dhealth-testnet', roles: 2, url: 'http://dual-01.dhealth.dev:3000' },
+        { friendlyName: 'dual-02-dhealth-testnnet', roles: 2, url: 'http://dual-02.dhealth.dev:3000' }
+    ],
+    httpsNodes: [
         { friendlyName: 'dual-01-dhealth-testnet', roles: 2, url: 'https://dual-01.dhealth.dev:3001' },
         { friendlyName: 'dual-02-dhealth-testnnet', roles: 2, url: 'https://dual-02.dhealth.dev:3001' }
-    ],
+    ]
 };
 
 export const defaultMainnetNetworkConfig: NetworkConfig = {
@@ -111,6 +116,9 @@ export const defaultMainnetNetworkConfig: NetworkConfig = {
         { friendlyName: 'dual-02-dhealth', roles: 2, url: 'http://dual-02.dhealth.cloud:3000' },
         { friendlyName: 'dual-03-dhealth', roles: 2, url: 'http://dual-03.dhealth.cloud:3000' }
     ],
+    httpsNodes: [
+        { friendlyName: 'dual-01-dhealth', roles: 2, url: 'https://dual-01.dhealth.cloud:3001' },
+    ]
 };
 
 const defaultNetworkConfig: Record<number, NetworkConfig> = {

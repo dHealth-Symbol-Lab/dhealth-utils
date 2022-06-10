@@ -14,6 +14,8 @@ import {
     TransactionGroup,
     TransactionMapping,
     TransactionSearchCriteria,
+    TransactionService,
+    TransactionStatusError,
     TransactionType,
     TransferTransaction,
     UInt64
@@ -27,9 +29,11 @@ import {
     NetworkConfig,
     NetworkUtil
 } from './'
-
-import { map, mergeMap, filter, toArray } from 'rxjs/operators';
+import { mergeMap, filter, toArray, tap, map } from 'rxjs/operators';
 import { TransactionCreationParams, TransactionStrategies } from './infrastructure';
+import { merge } from 'rxjs/internal/observable/merge';
+import { UniRepositoryFactoryHttp } from './infrastructure/web-socket/UniRepositoryFactoryHttp';
+
 export class TransactionUtil {
 
     public static createTransaction(Clazz: any, transactionCreationParams: TransactionCreationParams) {
@@ -46,9 +50,20 @@ export class TransactionUtil {
         const transaction = TransactionUtil.createTransaction(Clazz, transactionCreationParams);
         const account = Account.createFromPrivateKey(privateKey, transactionCreationParams.networkType);
         const signedTransaction = await this.signTransaction(account, transaction);
-        console.log('Payload:', signedTransaction.payload);
-        console.log('Transaction Hash:', signedTransaction.hash);
         const response = (await this.announceTransaction(signedTransaction));
+        return response;
+    }
+
+    public static async createAndAnnounceTransactionSync
+    (
+        Clazz: any,
+        transactionCreationParams: TransactionCreationParams,
+        privateKey: string,
+    ) {
+        const transaction = TransactionUtil.createTransaction(Clazz, transactionCreationParams);
+        const account = Account.createFromPrivateKey(privateKey, transactionCreationParams.networkType);
+        const signedTransaction = await this.signTransaction(account, transaction);
+        const response = (await this.announceTransactionSync(account, signedTransaction));
         return response;
     }
 
@@ -88,13 +103,55 @@ export class TransactionUtil {
         return signedTransaction;
     }
 
-    public static async announceTransaction(signedTransaction: SignedTransaction): Promise<TransactionAnnounceResponse> {
+    public static async announceTransaction(
+        signedTransaction: SignedTransaction
+    ): Promise<TransactionAnnounceResponse> {
         const networkType = signedTransaction.networkType;
         const node = await NetworkUtil.getNodeFromNetwork(networkType);
-        const repositoryFactory = new RepositoryFactoryHttp(node.url);
+        const repositoryFactory = new UniRepositoryFactoryHttp(node.url);
         const transactionHttp = repositoryFactory.createTransactionRepository();
         const response = transactionHttp.announce(signedTransaction)
         return response.toPromise();
+    }
+
+    public static async announceTransactionSync(
+        account: Account, signedTransaction: SignedTransaction
+    ): Promise<Transaction | TransactionStatusError> {
+        const networkType = signedTransaction.networkType;
+        const node = await NetworkUtil.getNodeFromNetwork(networkType);
+        const repositoryFactory = new UniRepositoryFactoryHttp(node.url);
+        const transactionHttp = repositoryFactory.createTransactionRepository();
+        const receiptHttp = repositoryFactory.createReceiptRepository();
+        const listener = repositoryFactory.createListener();
+        const transactionService = new TransactionService(transactionHttp, receiptHttp);
+        const result = await this.announceTransactionSyncAndGetResult(
+            listener, transactionService, signedTransaction, account
+        );
+        return result;
+    }
+
+    private static async announceTransactionSyncAndGetResult(
+        listener: any, transactionService: any, signedTransaction: any, account: any
+    ) {
+        return listener.open()
+            .then(() => new Promise((resolve, reject) =>
+                merge(...[
+                    transactionService.announce(signedTransaction, listener),
+                    listener.status(account.address).pipe(
+                        filter((error: any) => error.hash === signedTransaction.hash),
+                        tap((error: any) => {
+                            throw new Error(error.code);
+                        }),
+                    )
+                ]).subscribe(resolve, reject))
+            )
+            .then((transaction: Transaction) => {
+                listener.close();
+                return transaction;
+            }).catch((err: Error) => {
+                listener.close();
+                throw err;
+            })
     }
 
     /**
